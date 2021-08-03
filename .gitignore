@@ -1,3 +1,12 @@
+# scratch notes
+scratch/
+
+# downloaded CIFAR data
+CIFAR_data/
+
+# VS Code settings
+.vscode/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
