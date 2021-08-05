@@ -4,6 +4,9 @@ scratch/
 # downloaded CIFAR data
 CIFAR_data/
 
+# a larger english to french translation not needed for the moment
+eng-fra.txt
+
 # VS Code settings
 .vscode/
 
