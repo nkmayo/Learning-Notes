@@ -1,10 +1,8 @@
-"""This SiRNN technically runs, but doesn't currently learn and gets stuck always predicting the 
-same value in the name recognition test. The SiRNNet optionally adds a dense layer at the end and
-includes a softmax function for classification, but needs to be fixed, as the hidden layers are 
-not appropriately passed (or initiated). Need to manually define the forward method rather than
-calling Sequential.
+"""Something is off as the SiRNN doesn't learn, even with a 'tanh' activation which is essentially
+just a regular RNN. Weight initialization can't be the 'sinusoid'?
 Sources: 
 https://pytorch.org/tutorials/intermediate/char_rnn_classification_tutorial.html
+https://www.youtube.com/watch?v=SEnXr6v2ifU
 https://pytorch.org/tutorials/beginner/former_torchies/nnft_tutorial.html
 https://vsitzmann.github.io/siren/
 """
@@ -14,30 +12,145 @@ import torch
 from torch import nn
 from matplotlib import pyplot as plt
 
-# %%
-# maybe later allow choice of activations (for easy comparison)
+"""
+Okay, so the 'character RNN classification' tutorial actually uses a different RNN structure than
+pytorch does internally. The tutorial combines (concatenates) the input and hidden layers into a 
+longer vector before running a feed forward network to the output and hidden layers. Conversely,
+it appears that PyTorch uses the approach outlined in the MIT lecture series (see sources) which is
+to have the input and hidden layers feed forward (separately) and THEN combine (add together) to 
+an form the new hidden layer, after the activation function is applied. This new hidden layer is
+both fed forward to the output layer as well as copied over into the next iterations hidden input.
+
+(Concatenated)
+Mathematically, in the first case, you have c=cat(i_t,h_t-1) with size i.size + h.size. Then
+h_t = W_hc * c 
+o_t = activation(W_oc * c)
+The two weight matricies, W_hc and W_oc, have a total number of elements
+h*c + o*c = (h+o)*c = (h+o)*(h+i) = h*h + h*i + o*h + o*i
+
+(Standard)
+In the second case, you have
+h_t = activation(W_hi * i + W_hh * h_t-1)
+o_t = W_oh * h_t
+The three weight matricies, W_hh, W_hi, and W_oh, have a total number of elements
+h*h + h*i + o*h (o*i fewer)
+
+Let's see if they have a similar 'per weight' response...
+"""
+
+# %% Standard Version
 class SiRNN(nn.Module):
-    # 
-    def __init__(self, input_size, hidden_size, output_size, bias=True,
+    def __init__(self, input_size, recurrent_size, output_size, bias=True,
+                 is_first=False, omega_0=30, activation='sin'):
+        super().__init__()
+        self.omega_0 = omega_0
+        self.is_first = is_first
+        self.input_size = input_size
+        self.recurrent_size = recurrent_size
+        self.activation = activation
+
+        self.in2hid = nn.Linear(input_size, recurrent_size, bias=bias)
+        self.hid2hid = nn.Linear(recurrent_size, recurrent_size, bias=False) # bias would be duplicate
+        self.hid2out = nn.Linear(recurrent_size, output_size, bias=bias)
+        
+        self.init_weights()
+    
+    # so some appear to apply activation to the recurrent layer and pass the output, while others
+    # apply activation to the output and pass the recurrent
+    def forward(self, input, recurrent_previous):
+        recurrent = self.in2hid(input) + self.hid2hid(recurrent_previous)
+        if self.activation == 'tanh':
+            recurrent = torch.tanh(recurrent)
+        else:
+            recurrent = torch.sin(self.omega_0 * recurrent)
+        output = self.hid2out(recurrent)
+        return output, recurrent
+
+    # use the same initialization scheme from Vsitzmann et al.
+    def init_weights(self):
+        with torch.no_grad():
+            if self.is_first:
+                self.in2hid.weight.uniform_(-1 / self.input_size, 
+                                                1 / self.input_size)
+                self.hid2hid.weight.uniform_(-1 / self.recurrent_size, 
+                                                1 / self.recurrent_size)
+                self.hid2out.weight.uniform_(-1 / self.recurrent_size, 
+                                                1 / self.recurrent_size)       
+            else:
+                self.in2hid.weight.uniform_(-np.sqrt(6 / self.input_size) / self.omega_0, 
+                                                np.sqrt(6 / self.input_size) / self.omega_0)
+                self.hid2hid.weight.uniform_(-np.sqrt(6 / self.recurrent_size) / self.omega_0, 
+                                                np.sqrt(6 / self.recurrent_size) / self.omega_0)
+                self.hid2out.weight.uniform_(-np.sqrt(6 / self.recurrent_size) / self.omega_0, 
+                                                np.sqrt(6 / self.recurrent_size) / self.omega_0)                                       
+
+# Let's keep it simple to start and just have a single SiRNN followed by a dense layer and softmax output
+class SiRNNet(nn.Module):
+    def __init__(self, input_features, recurrent_size, intermediate_size, output_features, 
+                 outermost_linear=True, first_omega_0=30, intermediate_omega_0=30.):
+        super().__init__()
+        self.recurrent_size = recurrent_size
+        self.SiRNN = SiRNN(input_features, recurrent_size, intermediate_size,
+                                  is_first=True, omega_0=first_omega_0)
+        self.final_linear = nn.Linear(intermediate_size, output_features)
+        self.softmax = nn.LogSoftmax(dim=1)
+
+    
+    def forward(self, input, hidden):
+        # input = input.clone().detach().requires_grad_(True) # allows to take derivative w.r.t. input
+        output, new_hidden = self.SiRNN(input, hidden)
+        output = self.final_linear(output)
+        output = self.softmax(output)
+        return output, new_hidden
+
+    def zero_recurrent(self, batch_size):
+        """Returns initial recurrent state: a tensor of zeros to initially input into the recurrent layer"""
+        return torch.zeros(batch_size, self.recurrent_size) # pointless function?   
+
+# %% Check to make sure dummy data works on both SiRNN and a SiRNNet
+# model_S = SiRNN(50, 20, 10)
+model = SiRNNet(50, 20, 15, 10)
+
+loss_fn = nn.MSELoss()
+
+batch_size = 10
+TIMESTEPS = 5
+
+# Create some fake data
+batch = torch.randn(batch_size, 50)
+hidden = torch.zeros(batch_size, 20)
+target = torch.zeros(batch_size, 10)
+
+loss = 0
+for t in range(TIMESTEPS):
+    # yes! you can reuse the same network several times,
+    # sum up the losses, and call backward!
+    output, hidden = model(batch, hidden)
+    loss += loss_fn(output, target)
+loss.backward()
+
+# %% Concatenated version
+class SiRNNc(nn.Module):
+    def __init__(self, input_size, recurrent_size, output_size, bias=True,
                  is_first=False, omega_0=30):
         super().__init__()
         self.omega_0 = omega_0
         self.is_first = is_first
-        self.hidden_size = hidden_size
-        self.net_input = input_size + hidden_size
+        self.recurrent_size = recurrent_size
+        self.net_input = input_size + recurrent_size
 
-        self.comb2hid = nn.Linear(input_size + hidden_size, hidden_size, bias=bias)
-        self.comb2out = nn.Linear(input_size + hidden_size, output_size, bias=bias)
+        self.comb2hid = nn.Linear(input_size + recurrent_size, recurrent_size, bias=bias)
+        self.comb2out = nn.Linear(input_size + recurrent_size, output_size, bias=bias)
         
         self.init_weights()
     
-    # so some appear to apply activation to the hidden layer and pass the output, while others
-    # apply activation to the output and pass the hidden
-    def forward(self, x, hidden_state):
-        combined = torch.cat((x, hidden_state), 1)
-        hidden = torch.sin(self.omega_0 * self.comb2hid(combined))
+    # so some appear to apply activation to the recurrent layer and pass the output, while others
+    # apply activation to the output and pass the recurrent
+    def forward(self, x, recurrent_state):
+        combined = torch.cat((x, recurrent_state), 1)
+        recurrent = torch.sin(self.omega_0 * self.comb2hid(combined))
         output = self.comb2out(combined)
-        return output, hidden
+        return output, recurrent
 
     # use the same initialization scheme from Vsitzmann et al.
     def init_weights(self):
@@ -53,11 +166,11 @@ class SiRNN(nn.Module):
                 self.comb2out.weight.uniform_(-np.sqrt(6 / self.net_input) / self.omega_0, 
                                                 np.sqrt(6 / self.net_input) / self.omega_0)
     
-    def initHidden(self):
-        """Returns initial hidden state: a tensor of zeros to initially input into the hidden layer"""
-        return torch.zeros(1, self.hidden_size) # (batch_size, hidden_size)
+    def init_recurrent(self, batch_size):
+        """Returns initial recurrent state: a tensor of zeros to initially input into the recurrent layer"""
+        return torch.zeros(batch_size, self.recurrent_size) # (batch_size, recurrent_size)
 
-class SiRNNet(nn.Module):
+class SiRNNet2(nn.Module):
     def __init__(self, in_features, hidden_size, intermediate_size, hidden_layers, out_features, 
                  outermost_linear=False, first_omega_0=30, intermediate_omega_0=30.):
         super().__init__()
@@ -155,7 +268,31 @@ print(letterToTensor('J'))
 print(lineToTensor('Jones').size())
 
 n_hidden=128
-rnn = SiRNN(n_letters, n_hidden, n_categories)
+rnn = SiRNN(n_letters, n_hidden, n_categories, activation='tanh')
+
+# %% The tutorials RNN that seems to work...
+class RNN(nn.Module):
+    def __init__(self, input_size, hidden_size, output_size):
+        super(RNN, self).__init__()
+
+        self.hidden_size = hidden_size
+
+        self.i2h = nn.Linear(input_size + hidden_size, hidden_size)
+        self.i2o = nn.Linear(input_size + hidden_size, output_size)
+        self.softmax = nn.LogSoftmax(dim=1)
+
+    def forward(self, input, hidden):
+        combined = torch.cat((input, hidden), 1)
+        hidden = self.i2h(combined)
+        output = self.i2o(combined)
+        output = self.softmax(output)
+        return output, hidden
+
+    def initHidden(self):
+        return torch.zeros(1, self.hidden_size)
+
+n_hidden = 128
+rnn = RNN(n_letters, n_hidden, n_categories)
 # %%
 input = lineToTensor('Albert')
 hidden = torch.zeros(1, n_hidden)
@@ -169,7 +306,7 @@ def categoryFromOutput(output):
     return all_categories[category_i], category_i
 
 print(categoryFromOutput(output))
-# %%
+
 import random
 
 def randomChoice(l):
@@ -185,16 +322,20 @@ def randomTrainingExample():
 for i in range(10):
     category, line, category_tensor, line_tensor = randomTrainingExample()
     print('category =', category, '/ line =', line)
-# %% Need to use a SiRNNet not just a SiRNN as we need to softmax the output to make sense of it
+# %% Something is off, it doesn't converge even when using 'tanh' activation
+# or is it just the initial conditions with the sin activation?
 criterion = nn.NLLLoss()
 
-learning_rate = 0.05 # If you set this too high, it might explode. If too low, it might not learn
+learning_rate = 0.005 # If you set this too high, it might explode. If too low, it might not learn
 
 def train(category_tensor, line_tensor):
+    # for the SiRNN
     rnn.init_weights()
-    # initial hidden weights are the last self.hidden elements of init_weights
-    # hidden = rnn.in2hidden.weight
     hidden = torch.zeros(1, n_hidden)
+    
+    # initial hidden weights are the last self.hidden elements of init_weights
+    # hidden = rnn.initHidden()
+
     rnn.zero_grad()
 
     for i in range(line_tensor.size()[0]):
