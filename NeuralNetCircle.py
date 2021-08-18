@@ -9,6 +9,8 @@ from keras.callbacks import EarlyStopping
 from sklearn.metrics import confusion_matrix
 import matplotlib.pyplot as plt
 import seaborn as sns
+# if you want to use the "bright" colormap
+# from matplotlib.colors import ListedColormap
 # %%
 # create points (predictors) randomly between -20 and 20
 predictors = np.random.randint(-20,20,size=(10000,2))
@@ -60,7 +62,7 @@ plt.ylim(0.75,1)
 plt.xlabel('Epoch')
 plt.legend(['Train', 'Validate'])
 plt.show()
-
+# %%
 print('---Post evaluation---')
 model.evaluate(X_test, y_test)
 
@@ -75,6 +77,22 @@ g = sns.relplot(x='x',
             hue='p',
             )
 g.fig.suptitle('Test Data Set', fontsize=20, fontweight='bold')
+
+# contour plot overlay (maybe do this first?)
+h = .2  # step size in the mesh
+cm = plt.cm.RdBu # contour plot color palette
+
+x_min, x_max = min(X_val[:,0].min(), X_test[:,0].min()) - 1, max(X_val[:,0].max(), X_test[:,0].max()) + 1
+y_min, y_max = min(X_val[:,1].min(), X_test[:,1].min()) - 1, max(X_val[:,1].max(), X_test[:,1].max()) + 1
+xx, yy = np.meshgrid(np.arange(x_min, x_max, h), 
+                     np.arange(y_min, y_max, h))
+
+grid = np.stack([xx.ravel(), yy.ravel()], axis=1) # create grid for decision boundary
+
+probs = model.predict(grid) # predict probability along grid points
+probs = probs.reshape(xx.shape) # reshape predictions to grid dimensions
+
+g.ax.contourf(xx, yy, probs, cmap=cm, alpha=0.25)
 plt.show()
 
 y_pred_bool = (y_pred>0.5)
@@ -83,12 +101,6 @@ cm = confusion_matrix(y_test, y_pred_bool)
 print('Confusion Matrix:\n', cm)
 
 # print('y_test: ', y_test, 'y_pred: ', y_pred)
-# %%
-#data = {'x': np.reshape(X_test[:,0], (1000,1)), 'y': np.reshape(X_test[:,1], (1000,1)), 't': y_pred}
-#df2 = pd.DataFrame(data)
-data = {'x': X_test[:,0], 'y': X_test[:,1], 't': y_test, 'p': np.reshape(y_pred, (1000,))}
-df1 = pd.DataFrame(data)
-
 
 # %% not what we want. this is point density
 sns.kdeplot(data=data.drop('t', axis=1),
@@ -116,7 +128,7 @@ sns.histplot(data=data,
              )
 plt.show()
 
-# %% Aha! it's in scikit-learn examples
+# %% Aha! it's in scikit-learn examples (this current implementation is ugly and misshapen)
 # https://scikit-learn.org/stable/auto_examples/classification/plot_classifier_comparison.html#sphx-glr-auto-examples-classification-plot-classifier-comparison-py
 from matplotlib.colors import ListedColormap
 
@@ -130,7 +142,7 @@ xx, yy = np.meshgrid(np.arange(x_min, x_max, h),
 # just plot the dataset first
 cm = plt.cm.RdBu
 cm_bright = ListedColormap(['#FF0000', '#0000FF'])
-ax = plt.subplot(1, 1, 1) # not sure what dpi does exactly, why not 72?
+ax = plt.subplot(1, 1, 1)
 ax.set_title("Input data")
 # Plot the training points
 ax.scatter(predictors[0::50,0], predictors[0::50,1], c=target[0::50], cmap=cm_bright,
@@ -143,41 +155,11 @@ ax.set_ylim(yy.min(), yy.max())
 ax.set_xticks(())
 ax.set_yticks(())
 
-grid = np.stack([xx.ravel(), yy.ravel()], axis=1)
+grid = np.stack([xx.ravel(), yy.ravel()], axis=1) # create grid for decision boundary
 
-# probs = target
-# probs.reshape(xx.shape)
-# ax.contourf(xx, yy, probs, cmap=cm, alpha=0.8)
-# ax.set_title("Prediction contours")
-"""
-ax = plt.subplot(1, 1, 1)
+probs = model.predict(grid) # predict probability along grid points
+probs = probs.reshape(xx.shape) # reshape predictions to grid dimensions
+ax.contourf(xx, yy, probs, cmap=cm, alpha=0.8)
+ax.set_title("Prediction contours")
 
-# Plot the decision boundary. For that, we will assign a color to each
-# point in the mesh [x_min, x_max]x[y_min, y_max].
-if hasattr(clf, "decision_function"):
-    Z = clf.decision_function(np.c_[xx.ravel(), yy.ravel()])
-else:
-    Z = clf.predict_proba(np.c_[xx.ravel(), yy.ravel()])[:, 1]
-
-# Put the result into a color plot
-Z = Z.reshape(xx.shape)
-ax.contourf(xx, yy, Z, cmap=cm, alpha=.8)
-
-# Plot the training points
-ax.scatter(X_train[:, 0], X_train[:, 1], c=y_train, cmap=cm_bright,
-            edgecolors='k')
-# Plot the testing points
-ax.scatter(X_test[:, 0], X_test[:, 1], c=y_test, cmap=cm_bright,
-            edgecolors='k', alpha=0.6)
-
-ax.set_xlim(xx.min(), xx.max())
-ax.set_ylim(yy.min(), yy.max())
-ax.set_xticks(())
-ax.set_yticks(())
-if ds_cnt == 0:
-    ax.set_title(name)
-ax.text(xx.max() - .3, yy.min() + .3, ('%.2f' % score).lstrip('0'),
-        size=15, horizontalalignment='right')
-i += 1
-"""
 # %%
