@@ -80,10 +80,11 @@ g.fig.suptitle('Test Data Set', fontsize=20, fontweight='bold')
 
 # contour plot overlay (maybe do this first?)
 h = .2  # step size in the mesh
+delta = 1 # region beyond the min/max values that is displayed
 cm = plt.cm.RdBu # contour plot color palette
 
-x_min, x_max = min(X_val[:,0].min(), X_test[:,0].min()) - 1, max(X_val[:,0].max(), X_test[:,0].max()) + 1
-y_min, y_max = min(X_val[:,1].min(), X_test[:,1].min()) - 1, max(X_val[:,1].max(), X_test[:,1].max()) + 1
+x_min, x_max = min(X_val[:,0].min(), X_test[:,0].min()) - delta, max(X_val[:,0].max(), X_test[:,0].max()) + delta
+y_min, y_max = min(X_val[:,1].min(), X_test[:,1].min()) - delta, max(X_val[:,1].max(), X_test[:,1].max()) + delta
 xx, yy = np.meshgrid(np.arange(x_min, x_max, h), 
                      np.arange(y_min, y_max, h))
 

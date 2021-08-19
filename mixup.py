@@ -452,6 +452,10 @@ if __name__ == "__main__":
 # for me
 python Learning-Notes/mixup.py -r 123 -n 100000 -s 1000 tb_results/123 --mixup
 
+# launch with
+tensorboard --logdir=.\tb_results\123
+# and view at http://localhost:6006/
+
 # his bash script
 set -x # in bash set -x enables a mode of the shell where all executed commands are printed to the terminal.
 

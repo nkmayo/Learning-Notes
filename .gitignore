@@ -1,8 +1,9 @@
 # scratch notes
 scratch/
 
-# downloaded CIFAR data
+# downloaded datasets
 CIFAR_data/
+MNIST_data/
 
 # a larger english to french translation not needed for the moment
 eng-fra.txt
