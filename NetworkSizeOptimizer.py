@@ -13,7 +13,6 @@ end up saving time by not training unnecessarily large networks.
 Let's use a 'simple' feed forward network and the MNIST dataset as an example to practice on...
 
 Sources:
-https://theaisummer.com/Autoencoder/
 https://github.com/deep-learning-with-pytorch/dlwpt-code
 https://github.com/jankrepl/mildlyoverfitted/tree/master/github_adventures/mixup
 """
