@@ -12,6 +12,8 @@ a local minimum. Furthermore, the hope is that by starting small and growing the
 end up saving time by not training unnecessarily large networks.
 Let's use a 'simple' feed forward network and the MNIST dataset as an example to practice on...
 
+Note: Work in progress...size optimization hasn't been implemented yet
+
 Sources:
 https://github.com/deep-learning-with-pytorch/dlwpt-code
 https://github.com/jankrepl/mildlyoverfitted/tree/master/github_adventures/mixup

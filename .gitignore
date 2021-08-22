@@ -5,6 +5,9 @@ scratch/
 CIFAR_data/
 MNIST_data/
 
+# models
+lightning_logs/
+
 # a larger english to french translation not needed for the moment
 eng-fra.txt
 
