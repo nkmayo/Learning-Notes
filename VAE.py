@@ -117,6 +117,9 @@ def train(autoencoder, data, epochs=20):
             loss.backward()
             opt.step()
         
+        """Notes: both the original approach and my "new" approach both seem to vaguely
+        resemble the loss function described https://youtu.be/nQDZmf2Yb9k?t=1350"""
+
         if epoch == epochs or epoch % 3 == 0:
             print(
                 "{} Epoch {}, l1 {}, KL {}, Loss {}".format(
